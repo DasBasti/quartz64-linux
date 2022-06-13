@@ -173,6 +173,7 @@ extern void printk_prefer_direct_enter(void);
 extern void printk_prefer_direct_exit(void);
 
 extern bool pr_flush(int timeout_ms, bool reset_on_progress);
+extern void try_block_console_kthreads(int timeout_ms);
 
 /*
  * Please don't use printk_ratelimit(), because it shares ratelimiting state

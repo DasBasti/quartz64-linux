@@ -250,6 +250,8 @@ static atomic_t console_kthreads_active = ATOMIC_INIT(0);
 #define console_kthread_printing_exit() \
 	atomic_dec(&console_kthreads_active)
 
+static bool block_console_kthreads;
+
 /*
  * Helper macros to handle lockdep when locking/unlocking console_sem. We use
  * macros instead of functions so that _RET_IP_ contains useful information.
@@ -3686,6 +3688,24 @@ bool pr_flush(int timeout_ms, bool reset_on_progress)
 }
 EXPORT_SYMBOL(pr_flush);
 
+void try_block_console_kthreads(int timeout_ms)
+{
+	block_console_kthreads = true;
+
+	while (timeout_ms > 0) {
+		if (console_trylock()) {
+			console_unlock();
+			return;
+		}
+
+		udelay(1000);
+		timeout_ms -= 1;
+	}
+
+	/* Failed to block console kthreads. Let them do the job. */
+	block_console_kthreads = false;
+}
+
 static void __printk_fallback_preferred_direct(void)
 {
 	printk_prefer_direct_enter();
@@ -3729,7 +3749,8 @@ static bool printer_should_wake(struct console *con, u64 seq)
 		return true;
 
 	if (con->blocked ||
-	    console_kthreads_atomically_blocked()) {
+	    console_kthreads_atomically_blocked() ||
+	    block_console_kthreads) {
 		return false;
 	}
 
